@@ -2,8 +2,8 @@ import requests
 from typing import List, Dict, Optional
 from datetime import datetime
 
-from .abstract_api import JobAPIBase, APIConfig
-from .vacancy import Vacancy, Salary
+from src.abstract_api import JobAPIBase, APIConfig
+from src.vacancy import Vacancy, Salary
 
 
 class HeadHunterAPI(JobAPIBase):

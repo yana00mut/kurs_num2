@@ -3,7 +3,7 @@ from typing import List, Optional
 import json
 from pathlib import Path
 
-from .vacancy import Vacancy
+from src.vacancy import Vacancy
 
 
 class VacancyStorage(ABC):

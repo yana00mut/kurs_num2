@@ -1,7 +1,7 @@
-from src.api.hh_api import HeadHunterAPI
-from src.api.storage import JSONVacancyStorage
+from src import HeadHunterAPI
+from src import JSONVacancyStorage
 from typing import List
-from src.api.vacancy import Vacancy
+from src import Vacancy
 import os
 
 

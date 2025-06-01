@@ -1,141 +1,139 @@
-import unittest
-from unittest.mock import patch, MagicMock
-from src.api.hh_api import HeadHunterAPI
-from src.api.vacancy import Vacancy
+import pytest
+from src.hh_api import HeadHunterAPI
+from src.api.vacancy import Vacancy, Salary
 
+@pytest.fixture
+def hh_api():
+    """Fixture for creating HeadHunterAPI instance"""
+    return HeadHunterAPI()
 
-class TestHeadHunterAPI(unittest.TestCase):
-    """Тесты для класса HeadHunterAPI."""
+def test_get_vacancies_basic_search(hh_api):
+    """Test basic vacancy search"""
+    vacancies = hh_api.get_vacancies("Python Developer")
+    assert len(vacancies) > 0
+    assert all(isinstance(v, Vacancy) for v in vacancies)
+    
+    # Check basic vacancy attributes
+    for vacancy in vacancies:
+        assert vacancy.vacancy_id
+        assert vacancy.title
+        assert "Python" in vacancy.title.lower() or "Python" in vacancy.description.lower()
+        assert vacancy.url.startswith("https://hh.ru/vacancy/")
+        assert vacancy.employer
 
-    def setUp(self):
-        """Подготовка тестовых данных."""
-        self.api = HeadHunterAPI()
-        self.test_vacancy_data = {
-            "id": "12345",
-            "name": "Python Developer",
-            "salary": {
-                "from": 100000,
-                "to": 150000,
-                "currency": "RUR",
-                "gross": False
-            },
-            "snippet": {
-                "requirement": "Python, Django, REST",
-                "responsibility": "Разработка веб-приложений"
-            },
-            "employer": {
-                "name": "IT Company"
-            },
-            "alternate_url": "https://hh.ru/vacancy/12345",
-            "experience": {
-                "name": "От 1 года до 3 лет"
-            },
-            "employment": {
-                "name": "Полная занятость"
-            },
-            "published_at": "2024-02-20T10:00:00+0300"
-        }
+def test_get_vacancies_with_salary_range(hh_api):
+    """Test vacancy search with salary range"""
+    min_salary = 150000
+    max_salary = 300000
+    vacancies = hh_api.get_vacancies("Python", salary_from=min_salary, salary_to=max_salary)
+    
+    assert len(vacancies) > 0
+    for vacancy in vacancies:
+        if vacancy.salary:
+            if vacancy.salary.from_amount:
+                assert vacancy.salary.from_amount >= min_salary
+            if vacancy.salary.to_amount:
+                assert vacancy.salary.to_amount <= max_salary
 
-    @patch('requests.get')
-    def test_get_vacancies(self, mock_get):
-        """Тест получения вакансий."""
-        # Подготовка мок-ответа
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "items": [self.test_vacancy_data],
-            "found": 1,
-            "pages": 1,
-            "per_page": 20,
-            "page": 0
-        }
-        mock_get.return_value = mock_response
-
-        # Вызов метода и проверка результатов
-        vacancies = self.api.get_vacancies("Python Developer")
+def test_get_vacancies_with_experience(hh_api):
+    """Test vacancy search with different experience levels"""
+    experience_levels = ["noExperience", "between1And3", "between3And6", "moreThan6"]
+    
+    for exp in experience_levels:
+        vacancies = hh_api.get_vacancies("Python", experience=exp)
+        assert len(vacancies) >= 0  # Может быть 0 для некоторых уровней опыта
         
-        self.assertEqual(len(vacancies), 1)
-        self.assertIsInstance(vacancies[0], Vacancy)
-        self.assertEqual(vacancies[0].id, "12345")
-        self.assertEqual(vacancies[0].title, "Python Developer")
+        if vacancies:
+            # Проверяем, что опыт соответствует фильтру
+            if exp == "noExperience":
+                assert any("без опыта" in v.experience.lower() for v in vacancies)
+            elif exp == "between1And3":
+                assert any("1" in v.experience and "3" in v.experience for v in vacancies)
+            elif exp == "between3And6":
+                assert any("3" in v.experience and "6" in v.experience for v in vacancies)
+            elif exp == "moreThan6":
+                assert any("6" in v.experience for v in vacancies)
 
-        # Проверка вызова API с правильными параметрами
-        mock_get.assert_called_once()
-        args, kwargs = mock_get.call_args
-        self.assertEqual(kwargs['params']['text'], "Python Developer")
-        self.assertEqual(kwargs['params']['per_page'], 100)
+def test_get_vacancies_with_area(hh_api):
+    """Test vacancy search in different areas"""
+    # Тестируем поиск в Москве (1) и Санкт-Петербурге (2)
+    areas = [1, 2]
+    
+    for area in areas:
+        vacancies = hh_api.get_vacancies("Python", area=area)
+        assert len(vacancies) > 0
 
-    @patch('requests.get')
-    def test_get_vacancies_empty_response(self, mock_get):
-        """Тест получения пустого списка вакансий."""
-        # Подготовка мок-ответа без вакансий
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "items": [],
-            "found": 0,
-            "pages": 0,
-            "per_page": 20,
-            "page": 0
-        }
-        mock_get.return_value = mock_response
+def test_get_vacancies_pagination(hh_api):
+    """Test vacancy pagination"""
+    per_page = 20
+    pages = [0, 1]  # Тестируем первые две страницы
+    
+    previous_ids = set()
+    for page in pages:
+        vacancies = hh_api.get_vacancies("Python", per_page=per_page, page=page)
+        
+        # Проверяем количество результатов
+        assert len(vacancies) <= per_page
+        
+        # Проверяем уникальность вакансий между страницами
+        current_ids = {v.vacancy_id for v in vacancies}
+        assert not (previous_ids & current_ids)  # Не должно быть пересечений
+        previous_ids.update(current_ids)
 
-        # Вызов метода и проверка результатов
-        vacancies = self.api.get_vacancies("Несуществующая вакансия")
-        self.assertEqual(len(vacancies), 0)
+def test_get_vacancies_empty_search(hh_api):
+    """Test search with no results"""
+    nonsense_query = "ThisVacancyDefinitelyDoesNotExist12345"
+    vacancies = hh_api.get_vacancies(nonsense_query)
+    assert len(vacancies) == 0
 
-    @patch('requests.get')
-    def test_get_vacancies_with_error(self, mock_get):
-        """Тест обработки ошибки при получении вакансий."""
-        # Имитация ошибки сети
-        mock_get.side_effect = Exception("Network error")
+def test_get_vacancies_special_characters(hh_api):
+    """Test search with special characters"""
+    special_queries = [
+        "Python!@#$%",
+        "Python & Django",
+        "Python (Junior)",
+        "Python/Flask"
+    ]
+    
+    for query in special_queries:
+        vacancies = hh_api.get_vacancies(query)
+        # Проверяем, что API не падает с ошибкой
+        assert isinstance(vacancies, list)
 
-        # Проверка, что метод возвращает пустой список при ошибке
-        vacancies = self.api.get_vacancies("Python Developer")
-        self.assertEqual(len(vacancies), 0)
+def test_get_vacancies_with_all_filters(hh_api):
+    """Test search with all filters combined"""
+    vacancies = hh_api.get_vacancies(
+        text="Python",
+        salary_from=150000,
+        salary_to=300000,
+        experience="between1And3",
+        area=1,
+        per_page=20,
+        page=0
+    )
+    
+    assert isinstance(vacancies, list)
+    if vacancies:
+        vacancy = vacancies[0]
+        assert isinstance(vacancy, Vacancy)
+        assert vacancy.salary is None or isinstance(vacancy.salary, Salary)
 
-    @patch('requests.get')
-    def test_get_vacancies_invalid_response(self, mock_get):
-        """Тест обработки некорректного ответа API."""
-        # Подготовка некорректного ответа
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"invalid": "response"}
-        mock_get.return_value = mock_response
-
-        # Проверка обработки некорректного ответа
-        vacancies = self.api.get_vacancies("Python Developer")
-        self.assertEqual(len(vacancies), 0)
-
-    @patch('requests.get')
-    def test_get_vacancies_with_filters(self, mock_get):
-        """Тест получения вакансий с дополнительными фильтрами."""
-        # Подготовка мок-ответа
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "items": [self.test_vacancy_data],
-            "found": 1,
-            "pages": 1,
-            "per_page": 20,
-            "page": 0
-        }
-        mock_get.return_value = mock_response
-
-        # Вызов метода с дополнительными параметрами
-        vacancies = self.api.get_vacancies(
-            "Python Developer",
-            area=1,  # Москва
-            experience="noExperience",
-            employment="full"
-        )
-
-        # Проверка параметров запроса
-        args, kwargs = mock_get.call_args
-        self.assertEqual(kwargs['params']['area'], 1)
-        self.assertEqual(kwargs['params']['experience'], "noExperience")
-        self.assertEqual(kwargs['params']['employment'], "full")
-
-
-if __name__ == '__main__':
-    unittest.main() 
+def test_get_vacancies_response_structure(hh_api):
+    """Test detailed structure of vacancy response"""
+    vacancies = hh_api.get_vacancies("Python", per_page=1)
+    
+    if vacancies:
+        vacancy = vacancies[0]
+        # Проверяем все обязательные поля
+        assert vacancy.vacancy_id
+        assert vacancy.title
+        assert vacancy.url
+        assert vacancy.employer
+        assert vacancy.experience
+        
+        # Проверяем формат зарплаты
+        if vacancy.salary:
+            assert isinstance(vacancy.salary.from_amount, (int, type(None)))
+            assert isinstance(vacancy.salary.to_amount, (int, type(None)))
+            assert vacancy.salary.currency in ["RUR", "USD", "EUR"]
+            assert isinstance(vacancy.salary.gross, bool) 

@@ -1,3 +1,3 @@
 """
-Tests for the project modules.
+Test package for the job search project.
 """ 
