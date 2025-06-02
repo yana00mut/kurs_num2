@@ -1,10 +1,10 @@
 import pytest
 from abc import ABC
-from src.abstract_api import AbstractAPI
+from src.abstract_api import JobAPIBase
 from src.vacancy import Vacancy
 
-class TestAPI(AbstractAPI):
-    """Concrete implementation of AbstractAPI for testing"""
+class TestAPI(JobAPIBase):
+    """Concrete implementation of JobAPIBase for testing"""
     
     def __init__(self):
         self.vacancies = []
@@ -54,18 +54,15 @@ def sample_vacancy():
 
 def test_abstract_api_is_abstract():
     """Test that AbstractAPI is abstract class"""
-    assert issubclass(AbstractAPI, ABC)
+    assert issubclass(JobAPIBase, ABC)
     
-    # Проверяем, что нельзя создать экземпляр абстрактного класса
     with pytest.raises(TypeError):
-        AbstractAPI()
+        JobAPIBase()
 
 def test_get_vacancies_implementation(test_api, sample_vacancy):
     """Test that concrete implementation can get vacancies"""
-    # Устанавливаем тестовые вакансии
     test_api.set_test_vacancies([sample_vacancy])
     
-    # Получаем вакансии
     vacancies = test_api.get_vacancies("Python")
     
     assert len(vacancies) == 1
@@ -74,7 +71,6 @@ def test_get_vacancies_implementation(test_api, sample_vacancy):
 
 def test_get_vacancies_with_params(test_api):
     """Test getting vacancies with additional parameters"""
-    # Вызываем метод с дополнительными параметрами
     test_api.get_vacancies(
         "Python",
         salary_from=100000,
@@ -82,7 +78,7 @@ def test_get_vacancies_with_params(test_api):
         area=1
     )
     
-    # Проверяем, что все параметры были переданы
+
     assert test_api.search_params["text"] == "Python"
     assert test_api.search_params["salary_from"] == 100000
     assert test_api.search_params["experience"] == "between1And3"
@@ -90,7 +86,6 @@ def test_get_vacancies_with_params(test_api):
 
 def test_get_vacancies_empty_result(test_api):
     """Test getting vacancies with empty result"""
-    # Не устанавливаем вакансии (пустой список по умолчанию)
     vacancies = test_api.get_vacancies("Python")
     
     assert isinstance(vacancies, list)
@@ -98,7 +93,6 @@ def test_get_vacancies_empty_result(test_api):
 
 def test_get_vacancies_multiple_results(test_api):
     """Test getting multiple vacancies"""
-    # Создаем несколько тестовых вакансий
     test_vacancies = [
         Vacancy({
             "id": str(i),
@@ -118,7 +112,6 @@ def test_get_vacancies_multiple_results(test_api):
 
 def test_get_vacancies_preserves_order(test_api):
     """Test that get_vacancies preserves the order of vacancies"""
-    # Создаем тестовые вакансии в определенном порядке
     test_vacancies = [
         Vacancy({
             "id": "3",
@@ -146,7 +139,6 @@ def test_get_vacancies_preserves_order(test_api):
     test_api.set_test_vacancies(test_vacancies)
     vacancies = test_api.get_vacancies("Python")
     
-    # Проверяем, что порядок сохранился
     assert [v.id for v in vacancies] == ["3", "1", "2"]
     assert [v.title for v in vacancies] == [
         "Senior Python Developer",
@@ -155,8 +147,7 @@ def test_get_vacancies_preserves_order(test_api):
     ]
 
 def test_get_vacancies_with_special_characters(test_api):
-    """Test getting vacancies with special characters in search"""
-    # Проверяем различные специальные символы в поисковом запросе
+    """Test getting vacancies with special characters in search""" 
     special_queries = [
         "Python!@#$%",
         "Python & Django",

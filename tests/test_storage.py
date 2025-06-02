@@ -2,8 +2,8 @@ import pytest
 import json
 import os
 from datetime import datetime
-from src import JSONVacancyStorage
-from src import Vacancy
+from src.storage import JSONVacancyStorage
+from src.vacancy import Vacancy
 from src.vacancy import Salary
 
 @pytest.fixture
@@ -72,14 +72,11 @@ def test_storage_initialization(tmp_path):
 
 def test_save_and_load_single_vacancy(temp_storage, sample_vacancy):
     """Test saving and loading a single vacancy"""
-    # Save vacancy
     temp_storage.save_vacancy(sample_vacancy)
     
-    # Check file exists
     file_path = os.path.join(temp_storage.storage_dir, f"{sample_vacancy.id}.json")
     assert os.path.exists(file_path)
     
-    # Load and verify
     loaded_vacancy = temp_storage.load_vacancy(sample_vacancy.id)
     assert loaded_vacancy == sample_vacancy
     assert loaded_vacancy.title == sample_vacancy.title
@@ -88,14 +85,11 @@ def test_save_and_load_single_vacancy(temp_storage, sample_vacancy):
 
 def test_save_and_load_multiple_vacancies(temp_storage, multiple_vacancies):
     """Test saving and loading multiple vacancies"""
-    # Save vacancies
     temp_storage.save_vacancies(multiple_vacancies)
     
-    # Load and verify
     loaded_vacancies = temp_storage.load_vacancies()
     assert len(loaded_vacancies) == len(multiple_vacancies)
     
-    # Check each vacancy
     for original, loaded in zip(sorted(multiple_vacancies, key=lambda x: x.id), 
                               sorted(loaded_vacancies, key=lambda x: x.id)):
         assert original == loaded
@@ -104,24 +98,19 @@ def test_save_and_load_multiple_vacancies(temp_storage, multiple_vacancies):
 
 def test_delete_vacancy(temp_storage, sample_vacancy):
     """Test vacancy deletion"""
-    # Save and verify existence
     temp_storage.save_vacancy(sample_vacancy)
     assert temp_storage.vacancy_exists(sample_vacancy.id)
     
-    # Delete and verify
     temp_storage.delete_vacancy(sample_vacancy.id)
     assert not temp_storage.vacancy_exists(sample_vacancy.id)
     
-    # Check file is actually deleted
     file_path = os.path.join(temp_storage.storage_dir, f"{sample_vacancy.id}.json")
     assert not os.path.exists(file_path)
 
 def test_update_existing_vacancy(temp_storage, sample_vacancy):
     """Test updating an existing vacancy"""
-    # Save initial vacancy
     temp_storage.save_vacancy(sample_vacancy)
     
-    # Create updated version
     updated_vacancy = Vacancy({
         "id": sample_vacancy.id,
         "name": "Senior Python Developer",
@@ -137,7 +126,6 @@ def test_update_existing_vacancy(temp_storage, sample_vacancy):
         "published_at": "2024-02-20T10:00:00+0300"
     })
     
-    # Update and verify
     temp_storage.save_vacancy(updated_vacancy)
     loaded_vacancy = temp_storage.load_vacancy(sample_vacancy.id)
     
@@ -184,17 +172,13 @@ def test_save_vacancies_empty_list(temp_storage):
 
 def test_add_vacancies(temp_storage, multiple_vacancies):
     """Test adding vacancies to existing storage"""
-    # Save first vacancy
     temp_storage.save_vacancy(multiple_vacancies[0])
     
-    # Add rest of vacancies
     temp_storage.add_vacancies(multiple_vacancies[1:])
-    
-    # Verify all vacancies are saved
+
     loaded_vacancies = temp_storage.load_vacancies()
     assert len(loaded_vacancies) == len(multiple_vacancies)
     
-    # Check each vacancy exists
     for vacancy in multiple_vacancies:
         assert temp_storage.vacancy_exists(vacancy.id)
 
@@ -203,10 +187,8 @@ def test_file_permissions(temp_storage, sample_vacancy):
     temp_storage.save_vacancy(sample_vacancy)
     file_path = os.path.join(temp_storage.storage_dir, f"{sample_vacancy.id}.json")
     
-    # Check file is readable
     assert os.access(file_path, os.R_OK)
     
-    # Try reading file directly
     with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         assert data["id"] == sample_vacancy.id
@@ -221,18 +203,14 @@ def test_storage_with_nested_directories(tmp_path):
 
 def test_concurrent_vacancy_operations(temp_storage, multiple_vacancies):
     """Test concurrent operations with vacancies"""
-    # Save vacancies one by one
     for vacancy in multiple_vacancies:
         temp_storage.save_vacancy(vacancy)
     
-    # Load all vacancies
     loaded_vacancies = temp_storage.load_vacancies()
     assert len(loaded_vacancies) == len(multiple_vacancies)
     
-    # Delete vacancies while loading others
     temp_storage.delete_vacancy(multiple_vacancies[0].id)
     assert temp_storage.load_vacancy(multiple_vacancies[1].id) is not None
     
-    # Verify final state
     remaining_vacancies = temp_storage.load_vacancies()
     assert len(remaining_vacancies) == len(multiple_vacancies) - 1 

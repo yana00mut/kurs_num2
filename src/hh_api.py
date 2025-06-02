@@ -28,7 +28,7 @@ class HeadHunterAPI(JobAPIBase):
             bool: Успешность подключения
         """
         try:
-            response = self._session.get(f"{self.config.base_url}/ping")
+            response = self._session.get(f"{self.config.base_url}/vacancies")
             self._is_connected = response.status_code == 200
             return self._is_connected
         except requests.RequestException:
