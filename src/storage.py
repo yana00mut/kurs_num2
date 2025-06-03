@@ -3,7 +3,7 @@ from typing import List, Optional
 import json
 from pathlib import Path
 
-from src.vacancy import Vacancy
+from src.vacancy import Vacancy, Salary
 
 
 class VacancyStorage(ABC):
@@ -41,9 +41,11 @@ class JSONVacancyStorage(VacancyStorage):
             file_path: Путь к JSON файлу
         """
         self.file_path = Path(file_path)
+        if not self.file_path.suffix:
+            self.file_path = self.file_path / "vacancies.json"
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.file_path.exists():
-            self.file_path.write_text('[]')
+            self._write_file([])
 
     def add_vacancy(self, vacancy: Vacancy) -> None:
         """
@@ -53,6 +55,8 @@ class JSONVacancyStorage(VacancyStorage):
             vacancy: Объект вакансии
         """
         vacancies = self._read_file()
+        
+        # Преобразуем вакансию в словарь
         vacancy_dict = {
             'id': vacancy.id,
             'title': vacancy.title,
@@ -68,13 +72,18 @@ class JSONVacancyStorage(VacancyStorage):
             'requirements': vacancy.requirements,
             'experience': vacancy.experience,
             'employment': vacancy.employment,
-            'created_at': vacancy.created_at.isoformat()
+            'created_at': vacancy.created_at.isoformat() if vacancy.created_at else None
         }
         
-        # Проверяем, нет ли уже такой вакансии
-        if not any(v['id'] == vacancy.id for v in vacancies):
+        # Обновляем существующую вакансию или добавляем новую
+        for i, v in enumerate(vacancies):
+            if v['id'] == vacancy.id:
+                vacancies[i] = vacancy_dict
+                break
+        else:
             vacancies.append(vacancy_dict)
-            self._write_file(vacancies)
+        
+        self._write_file(vacancies)
 
     def get_vacancies(self, keyword: Optional[str] = None) -> List[Vacancy]:
         """
@@ -90,7 +99,10 @@ class JSONVacancyStorage(VacancyStorage):
         result = []
 
         for vacancy_dict in vacancies:
-            if keyword is None or keyword.lower() in vacancy_dict['description'].lower():
+            if keyword is None or (
+                keyword.lower() in vacancy_dict['title'].lower() or
+                keyword.lower() in vacancy_dict['description'].lower()
+            ):
                 result.append(self._dict_to_vacancy(vacancy_dict))
 
         return result
@@ -112,26 +124,46 @@ class JSONVacancyStorage(VacancyStorage):
 
     def _read_file(self) -> List[dict]:
         """Чтение данных из JSON файла"""
-        with self.file_path.open('r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            if not self.file_path.exists():
+                return []
+            with self.file_path.open('r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"Ошибка при чтении файла: {e}")
+            return []
 
     def _write_file(self, data: List[dict]) -> None:
         """Запись данных в JSON файл"""
-        with self.file_path.open('w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            with self.file_path.open('w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            print(f"Ошибка при записи в файл: {e}")
 
     def _dict_to_vacancy(self, vacancy_dict: dict) -> Vacancy:
         """Преобразование словаря в объект Vacancy"""
         from datetime import datetime
+        
+        # Создаем объект Salary
+        salary_data = vacancy_dict.get('salary', {})
+        salary = Salary(
+            min_value=salary_data.get('min_value'),
+            max_value=salary_data.get('max_value'),
+            currency=salary_data.get('currency', 'RUR'),
+            gross=salary_data.get('gross', False)
+        )
+        
+        # Создаем объект Vacancy
         return Vacancy(
             vacancy_id=vacancy_dict['id'],
             title=vacancy_dict['title'],
-            salary=vacancy_dict['salary'],
-            description=vacancy_dict['description'],
-            company_name=vacancy_dict['company_name'],
-            url=vacancy_dict['url'],
-            requirements=vacancy_dict['requirements'],
-            experience=vacancy_dict['experience'],
-            employment=vacancy_dict['employment'],
-            created_at=datetime.fromisoformat(vacancy_dict['created_at'])
+            salary=salary,
+            description=vacancy_dict.get('description', ''),
+            company_name=vacancy_dict.get('company_name', ''),
+            url=vacancy_dict.get('url', ''),
+            requirements=vacancy_dict.get('requirements', ''),
+            experience=vacancy_dict.get('experience', ''),
+            employment=vacancy_dict.get('employment', ''),
+            created_at=datetime.fromisoformat(vacancy_dict['created_at']) if vacancy_dict.get('created_at') else None
         ) 

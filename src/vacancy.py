@@ -76,7 +76,14 @@ class Vacancy:
         """
         self._id = vacancy_id
         self._title = title
-        self._salary = self._validate_salary(salary)
+        self._salary = None if salary is None else (
+            salary if isinstance(salary, Salary) else Salary(
+                min_value=salary.get('from'),
+                max_value=salary.get('to'),
+                currency=salary.get('currency', 'RUR'),
+                gross=salary.get('gross', False)
+            )
+        )
         self._description = description
         self._company_name = company_name
         self._url = url
@@ -84,19 +91,6 @@ class Vacancy:
         self._experience = experience
         self._employment = employment
         self._created_at = created_at or datetime.now()
-
-    def _validate_salary(self, salary: Optional[Union[dict, Salary]]) -> Salary:
-        """Валидация данных о зарплате"""
-        if isinstance(salary, Salary):
-            return salary
-        if isinstance(salary, dict):
-            return Salary(
-                min_value=salary.get('from'),
-                max_value=salary.get('to'),
-                currency=salary.get('currency', 'RUR'),
-                gross=salary.get('gross', False)
-            )
-        return Salary()
 
     @staticmethod
     def cast_to_object_list(vacancies_data: List[Dict]) -> List['Vacancy']:
@@ -118,11 +112,11 @@ class Vacancy:
                 company_name=data.get('employer', {}).get('name', ''),
                 url=data.get('alternate_url', ''),
                 requirements=data.get('snippet', {}).get('requirement', ''),
-                experience=data.get('experience', {}).get('name', ''),
+                experience=data.get('experience', {}).get('id', ''),
                 employment=data.get('employment', {}).get('name', ''),
                 created_at=datetime.fromisoformat(
                     data.get('created_at', datetime.now().isoformat()).replace("Z", "+00:00")
-                )
+                ) if data.get('created_at') else datetime.now()
             )
             for data in vacancies_data
         ]
@@ -160,7 +154,7 @@ class Vacancy:
         """
         try:
             min_salary, max_salary = map(int, salary_range.replace(" ", "").split("-"))
-            return self.salary.in_range(min_salary, max_salary)
+            return self.salary.in_range(min_salary, max_salary) if self.salary else False
         except (ValueError, AttributeError):
             return False
 
@@ -173,7 +167,7 @@ class Vacancy:
         return self._title
 
     @property
-    def salary(self) -> Salary:
+    def salary(self) -> Optional[Salary]:
         return self._salary
 
     @property
@@ -206,15 +200,10 @@ class Vacancy:
 
     def __lt__(self, other: 'Vacancy') -> bool:
         """Сравнение вакансий по зарплате"""
+        if not self.salary or not other.salary:
+            return False
         return self.salary < other.salary
 
     def __str__(self) -> str:
         """Строковое представление вакансии"""
-        return (
-            f"Вакансия: {self.title}\n"
-            f"Компания: {self.company_name}\n"
-            f"Зарплата: {self.salary}\n"
-            f"Опыт: {self.experience}\n"
-            f"Тип занятости: {self.employment}\n"
-            f"URL: {self.url}"
-        ) 
+        return f"{self.title} ({self.company_name})" 

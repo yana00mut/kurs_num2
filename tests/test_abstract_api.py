@@ -9,10 +9,28 @@ class TestAPI(JobAPIBase):
     def __init__(self):
         self.vacancies = []
         self.search_params = {}
+        self._is_connected = False
     
     def get_vacancies(self, text, **kwargs):
         self.search_params = {"text": text, **kwargs}
         return self.vacancies
+    
+    def connect(self) -> bool:
+        """Test implementation of connect method"""
+        self._is_connected = True
+        return True
+    
+    def get_vacancy_details(self, vacancy_id: str) -> dict:
+        """Test implementation of get_vacancy_details method"""
+        for vacancy in self.vacancies:
+            if vacancy.id == vacancy_id:
+                return {
+                    "id": vacancy.id,
+                    "name": vacancy.title,
+                    "employer": {"name": vacancy.company_name},
+                    "alternate_url": vacancy.url
+                }
+        return {}
     
     def set_test_vacancies(self, vacancies):
         """Helper method to set test vacancies"""
@@ -26,31 +44,22 @@ def test_api():
 @pytest.fixture
 def sample_vacancy():
     """Fixture for sample vacancy"""
-    return Vacancy({
-        "id": "12345",
-        "name": "Python Developer",
-        "salary": {
+    return Vacancy(
+        vacancy_id="12345",
+        title="Python Developer",
+        salary={
             "from": 100000,
             "to": 150000,
             "currency": "RUR",
             "gross": False
         },
-        "snippet": {
-            "requirement": "Python, Django, REST",
-            "responsibility": "Разработка веб-приложений"
-        },
-        "employer": {
-            "name": "IT Company"
-        },
-        "alternate_url": "https://hh.ru/vacancy/12345",
-        "experience": {
-            "name": "От 1 года до 3 лет"
-        },
-        "employment": {
-            "name": "Полная занятость"
-        },
-        "published_at": "2024-02-20T10:00:00+0300"
-    })
+        description="",
+        company_name="IT Company",
+        url="https://hh.ru/vacancy/12345",
+        requirements="Python, Django, REST",
+        experience="От 1 года до 3 лет",
+        employment="Полная занятость"
+    )
 
 def test_abstract_api_is_abstract():
     """Test that AbstractAPI is abstract class"""
@@ -94,13 +103,12 @@ def test_get_vacancies_empty_result(test_api):
 def test_get_vacancies_multiple_results(test_api):
     """Test getting multiple vacancies"""
     test_vacancies = [
-        Vacancy({
-            "id": str(i),
-            "name": f"Python Developer {i}",
-            "employer": {"name": f"Company {i}"},
-            "alternate_url": f"https://hh.ru/vacancy/{i}",
-            "published_at": "2024-02-20T10:00:00+0300"
-        }) for i in range(1, 4)
+        Vacancy(
+            vacancy_id=str(i),
+            title=f"Python Developer {i}",
+            company_name=f"Company {i}",
+            url=f"https://hh.ru/vacancy/{i}"
+        ) for i in range(1, 4)
     ]
     
     test_api.set_test_vacancies(test_vacancies)
@@ -113,27 +121,24 @@ def test_get_vacancies_multiple_results(test_api):
 def test_get_vacancies_preserves_order(test_api):
     """Test that get_vacancies preserves the order of vacancies"""
     test_vacancies = [
-        Vacancy({
-            "id": "3",
-            "name": "Senior Python Developer",
-            "employer": {"name": "Company A"},
-            "alternate_url": "https://hh.ru/vacancy/3",
-            "published_at": "2024-02-20T10:00:00+0300"
-        }),
-        Vacancy({
-            "id": "1",
-            "name": "Junior Python Developer",
-            "employer": {"name": "Company B"},
-            "alternate_url": "https://hh.ru/vacancy/1",
-            "published_at": "2024-02-20T10:00:00+0300"
-        }),
-        Vacancy({
-            "id": "2",
-            "name": "Middle Python Developer",
-            "employer": {"name": "Company C"},
-            "alternate_url": "https://hh.ru/vacancy/2",
-            "published_at": "2024-02-20T10:00:00+0300"
-        })
+        Vacancy(
+            vacancy_id="3",
+            title="Senior Python Developer",
+            company_name="Company A",
+            url="https://hh.ru/vacancy/3"
+        ),
+        Vacancy(
+            vacancy_id="1",
+            title="Junior Python Developer",
+            company_name="Company B",
+            url="https://hh.ru/vacancy/1"
+        ),
+        Vacancy(
+            vacancy_id="2",
+            title="Middle Python Developer",
+            company_name="Company C",
+            url="https://hh.ru/vacancy/2"
+        )
     ]
     
     test_api.set_test_vacancies(test_vacancies)

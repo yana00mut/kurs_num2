@@ -16,9 +16,6 @@ class HeadHunterAPI(JobAPIBase):
             timeout=10
         ))
         self._session = requests.Session()
-        self._session.headers = {
-            "User-Agent": "JobSearchApp/1.0 (api@example.com)"
-        }
 
     def connect(self) -> bool:
         """
@@ -37,40 +34,92 @@ class HeadHunterAPI(JobAPIBase):
 
     def get_vacancies(
         self,
-        keywords: str,
+        text: str,
         location: Optional[str] = None,
-        limit: int = 100
+        salary_from: Optional[int] = None,
+        salary_to: Optional[int] = None,
+        experience: Optional[str] = None,
+        area: Optional[int] = None,
+        per_page: int = 100,
+        page: int = 0
     ) -> List[Dict]:
         """
         Получение списка вакансий с HeadHunter
         
         Args:
-            keywords: Ключевые слова для поиска
+            text: Текст поискового запроса
             location: Местоположение (город, регион)
-            limit: Максимальное количество вакансий
+            salary_from: Минимальная зарплата
+            salary_to: Максимальная зарплата
+            experience: Требуемый опыт работы
+            area: ID региона
+            per_page: Количество вакансий на страницу
+            page: Номер страницы
             
         Returns:
-            List[Dict]: Список вакансий
+            List[Dict]: Список вакансий в формате словарей
         """
         params = {
-            "text": keywords,
-            "area": self._get_area_id(location) if location else None,
-            "per_page": min(limit, 100),
-            "page": 0
+            "text": text.strip(),
+            "area": area if area is not None else self._get_area_id(location) if location else None,
+            "salary": salary_from if salary_from else None,
+            "only_with_salary": "true" if salary_from or salary_to else None,
+            "experience": experience,
+            "per_page": min(per_page, 100),
+            "page": page,
+            "search_field": ["name", "description"]  # Поиск в названии и описании
         }
 
         try:
             response = self._session.get(
                 f"{self.config.base_url}/vacancies",
-                params={k: v for k, v in params.items() if v is not None}
+                params={k: v for k, v in params.items() if v is not None},
+                timeout=self.config.timeout
             )
             response.raise_for_status()
             self._last_request_time = datetime.now()
             
             data = response.json()
-            return [self._parse_vacancy(item) for item in data.get("items", [])]
+            vacancies = data.get("items", [])
+            
+            # Дополнительная фильтрация результатов
+            filtered_vacancies = []
+            text_lower = text.lower()
+            
+            for vacancy in vacancies:
+                # Проверка на наличие текста в названии или описании
+                name = (vacancy.get("name") or "").lower()
+                description = (vacancy.get("description") or "").lower()
+                snippet = vacancy.get("snippet") or {}
+                requirement = (snippet.get("requirement") or "").lower()
+                responsibility = (snippet.get("responsibility") or "").lower()
+                
+                if text_lower not in name and text_lower not in description and \
+                   text_lower not in requirement and text_lower not in responsibility:
+                    continue
+                
+                # Проверка зарплаты
+                salary_data = vacancy.get("salary")
+                if salary_from and salary_data:
+                    if not salary_data.get("from") or salary_data["from"] < salary_from:
+                        continue
+                if salary_to and salary_data:
+                    if not salary_data.get("to") or salary_data["to"] > salary_to:
+                        continue
+                
+                # Проверка опыта
+                if experience:
+                    vacancy_experience = vacancy.get("experience", {}).get("id")
+                    if vacancy_experience != experience:
+                        continue
+                
+                filtered_vacancies.append(vacancy)
+            
+            return filtered_vacancies[:per_page]
         except requests.RequestException as e:
             print(f"Ошибка при получении вакансий: {e}")
+            if hasattr(e.response, 'text'):
+                print(f"Ответ сервера: {e.response.text}")
             return []
 
     def get_vacancy_details(self, vacancy_id: str) -> Dict:
